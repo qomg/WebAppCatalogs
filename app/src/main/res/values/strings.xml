@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">WebAppCatalogs</string>
+    <string name="msg_token_fmt">firebase token is %s</string>
+    <string name="default_notification_channel_id">webappcatalogs</string>
+</resources>
