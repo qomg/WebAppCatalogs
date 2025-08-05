@@ -1,21 +1,16 @@
 package com.qomg.webappcatalogs
 
-import android.app.NotificationChannel
-import android.app.NotificationManager
-import android.app.PendingIntent
 import android.content.Context
-import android.content.Intent
-import android.media.RingtoneManager
-import android.os.Build
+import android.speech.tts.TextToSpeech
 import android.util.Log
-import androidx.core.app.NotificationCompat
 import androidx.work.OneTimeWorkRequest
 import androidx.work.WorkManager
 import androidx.work.Worker
 import androidx.work.WorkerParameters
-import com.google.android.gms.common.GoogleApiAvailability
+import androidx.work.workDataOf
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
+import java.util.Locale
 
 class MyFirebaseMessagingService : FirebaseMessagingService() {
 
@@ -24,18 +19,18 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
         // TODO(developer): Handle FCM messages here.
         // Not getting messages here? See why this may be: https://goo.gl/39bRNJ
         Log.d(TAG, "From: ${remoteMessage.from}")
-
+        val data = remoteMessage.data
         // Check if message contains a data payload.
-        if (remoteMessage.data.isNotEmpty()) {
-            Log.d(TAG, "Message data payload: ${remoteMessage.data}")
+        if (data.isNotEmpty()) {
+            Log.d(TAG, "Message data payload: $data")
 
             // Check if data needs to be processed by long running job
             if (needsToBeScheduled()) {
                 // For long-running tasks (10 seconds or more) use WorkManager.
-                scheduleJob()
+                scheduleJob(data)
             } else {
                 // Handle message within 10 seconds
-                handleNow()
+                handleNow(data)
             }
         }
 
@@ -67,9 +62,13 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
     }
     // [END on_new_token]
 
-    private fun scheduleJob() {
+    private fun scheduleJob(data: Map<String, String>) {
         // [START dispatch_job]
+        val pairs = data.entries.map { (k,v) ->
+            k to v
+        }.toTypedArray()
         val work = OneTimeWorkRequest.Builder(MyWorker::class.java)
+            .setInputData(workDataOf(*pairs))
             .build()
         WorkManager.getInstance(this)
             .beginWith(work)
@@ -77,8 +76,11 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
         // [END dispatch_job]
     }
 
-    private fun handleNow() {
+    private fun handleNow(data: Map<String, String>) {
         Log.d(TAG, "Short lived task is done.")
+        val body = data["body"] ?: return
+        sendNotification(applicationContext, body)
+        performTextToSpeech(applicationContext, body)
     }
 
     private fun sendRegistrationToServer(token: String?) {
@@ -86,50 +88,39 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
         Log.d(TAG, "sendRegistrationTokenToServer($token)")
     }
 
-    private fun sendNotification(messageBody: String) {
-        val intent = Intent(this, MainActivity::class.java)
-        intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
-        val requestCode = 0
-        val pendingIntent = PendingIntent.getActivity(
-            this,
-            requestCode,
-            intent,
-            PendingIntent.FLAG_IMMUTABLE,
-        )
-
-        val channelId = "fcm_default_channel"
-        val defaultSoundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
-        val notificationBuilder = NotificationCompat.Builder(this, channelId)
-            .setSmallIcon(R.mipmap.ic_launcher)
-            .setContentTitle("FCM Message")
-            .setContentText(messageBody)
-            .setAutoCancel(true)
-            .setSound(defaultSoundUri)
-            .setContentIntent(pendingIntent)
-
-        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-
-        // Since android Oreo notification channel is needed.
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                channelId,
-                "Channel human readable title",
-                NotificationManager.IMPORTANCE_DEFAULT,
-            )
-            notificationManager.createNotificationChannel(channel)
-        }
-
-        val notificationId = 0
-        notificationManager.notify(notificationId, notificationBuilder.build())
+    override fun onDestroy() {
+        tts?.stop()
+        tts?.shutdown()
+        super.onDestroy()
     }
 
     companion object {
         private const val TAG = "MyFirebaseMsgService"
+        var tts: TextToSpeech? = null
+
+        /**
+         * 触发语音播报
+         */
+        private fun performTextToSpeech(context: Context, text: String) {
+            // 实现语音播报逻辑，可以使用 TextToSpeech 或第三方 SDK
+            // 示例：使用 Android 的 TextToSpeech
+            tts = TextToSpeech(context) { status ->
+                if (status == TextToSpeech.SUCCESS) {
+                    tts?.language = Locale.CHINA
+                    tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, null)
+                }
+            }
+        }
     }
 
     internal class MyWorker(appContext: Context, workerParams: WorkerParameters) : Worker(appContext, workerParams) {
         override fun doWork(): Result {
             // TODO(developer): add long running task here.
+            val body = inputData.getString("body")
+            if (!body.isNullOrEmpty()) {
+                sendNotification(applicationContext, body)
+                performTextToSpeech(applicationContext, body)
+            }
             return Result.success()
         }
     }
