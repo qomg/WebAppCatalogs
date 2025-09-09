@@ -30,6 +30,8 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+        simulateSocketTimeout()
+        simulateTimeoutWithCoroutine()
     }
 
     override fun onPostCreate(savedInstanceState: Bundle?) {
