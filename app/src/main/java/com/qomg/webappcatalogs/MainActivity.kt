@@ -14,6 +14,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import com.google.android.gms.common.GoogleApiAvailability
 import com.google.android.gms.common.api.CommonStatusCodes.SUCCESS
 import com.qomg.webappcatalogs.api.AppLogger
+import com.qomg.webappcatalogs.network.NetworkUsage
 import com.qomg.webappcatalogs.ui.theme.WebAppCatalogsTheme
 
 class MainActivity : ComponentActivity() {
@@ -32,6 +33,7 @@ class MainActivity : ComponentActivity() {
         }
         simulateSocketTimeout()
         simulateTimeoutWithCoroutine()
+        NetworkUsage.updateNetworkStatus(this)
     }
 
     override fun onPostCreate(savedInstanceState: Bundle?) {
